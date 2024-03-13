@@ -1,4 +1,5 @@
 package com.project.shopapp.models;
+
 import jakarta.persistence.*;
 import lombok.*;
 

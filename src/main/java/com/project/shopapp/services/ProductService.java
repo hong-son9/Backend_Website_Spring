@@ -15,7 +15,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -25,6 +27,7 @@ public class ProductService implements IProductService{
     private final CategoryRepository categoryRepository;
     private final ProductImageRepository productImageRepository;
     @Override
+    @Transactional
     public Product createProduct(ProductDTO productDTO) throws DataNotFoundException {
         Category existingCategory = categoryRepository
                 .findById(productDTO.getCategoryId())
@@ -44,20 +47,27 @@ public class ProductService implements IProductService{
 
     @Override
     public Product getProductById(long productId) throws Exception {
-        return productRepository.findById(productId).
-                orElseThrow(()-> new DataNotFoundException(
-                        "Cannot find product with id ="+productId));
+        Optional<Product> optionalProduct = productRepository.getDetailProduct(productId);
+        if(optionalProduct.isPresent()) {
+            return optionalProduct.get();
+        }
+        throw new DataNotFoundException("Cannot find product with id =" + productId);
+    }
+    @Override
+    public List<Product> findProductsByIds(List<Long> productIds) {
+        return productRepository.findProductsByIds(productIds);
     }
 
     @Override
-    public Page<ProductResponse> getAllProducts(PageRequest pageRequest) {
-        // Lấy danh sách sản phẩm theo trang(page) và giới hạn(limit)
-        return productRepository
-                .findAll(pageRequest)
-                .map(ProductResponse::fromProduct);
+    public Page<ProductResponse> getAllProducts(String keyword,
+                                                Long categoryId, PageRequest pageRequest) {
+        // Lấy danh sách sản phẩm theo trang (page), giới hạn (limit), và categoryId (nếu có)
+        Page<Product> productsPage;
+        productsPage = productRepository.searchProducts(categoryId, keyword, pageRequest);
+        return productsPage.map(ProductResponse::fromProduct);
     }
-
     @Override
+    @Transactional
     public Product updateProduct(
             long id,
             ProductDTO productDTO
@@ -72,11 +82,22 @@ public class ProductService implements IProductService{
                     .orElseThrow(() ->
                             new DataNotFoundException(
                                     "Cannot find category with id: "+productDTO.getCategoryId()));
-            existingProduct.setName(productDTO.getName());
+            if(productDTO.getName() != null && !productDTO.getName().isEmpty()) {
+                existingProduct.setName(productDTO.getName());
+            }
+
             existingProduct.setCategory(existingCategory);
-            existingProduct.setPrice(productDTO.getPrice());
-            existingProduct.setDescription(productDTO.getDescription());
-            existingProduct.setThumbnail(productDTO.getThumbnail());
+            if(productDTO.getPrice() >= 0) {
+                existingProduct.setPrice(productDTO.getPrice());
+            }
+            if(productDTO.getDescription() != null &&
+                    !productDTO.getDescription().isEmpty()) {
+                existingProduct.setDescription(productDTO.getDescription());
+            }
+            if(productDTO.getThumbnail() != null &&
+                    !productDTO.getThumbnail().isEmpty()) {
+                existingProduct.setDescription(productDTO.getThumbnail());
+            }
             return productRepository.save(existingProduct);
         }
         return null;
@@ -84,6 +105,7 @@ public class ProductService implements IProductService{
     }
 
     @Override
+    @Transactional
     public void deleteProduct(long id) {
         Optional<Product> optionalProduct = productRepository.findById(id);
         optionalProduct.ifPresent(productRepository::delete);
@@ -94,6 +116,7 @@ public class ProductService implements IProductService{
         return productRepository.existsByName(name);
     }
     @Override
+    @Transactional
     public ProductImage createProductImage(
             Long productId,
             ProductImageDTO productImageDTO) throws Exception {
@@ -115,4 +138,5 @@ public class ProductService implements IProductService{
         }
         return productImageRepository.save(newProductImage);
     }
+
 }
